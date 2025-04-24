@@ -8,9 +8,12 @@ import aiohttp
 import json
 import datetime
 import asyncio
+from aiohttp import web 
 
 load_dotenv()
 token = os.getenv('DISCORD_TOKEN')
+
+PORT = int(os.getenv('PORT', 8080))
 
 handler = logging.FileHandler(filename='discord.log', encoding='utf-8', mode='w')
 intents = discord.Intents.default()
@@ -21,10 +24,24 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 
 secret_role = "Cutie"
 
+app = web.Application()
+
+async def handle_index(request):
+    return web.Response(text=f"{bot.user.name} is up and running!")
+
+app.router.add_get('/', handle_index)
+
+async def start_webserver():
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', PORT)
+    await site.start()
+    print(f"Web server started on port {PORT}")
 
 @bot.event
 async def on_ready():
     print(f"YAYYY!! We are up and running:) {bot.user.name}")
+    await start_webserver()
 
 
 @bot.event
