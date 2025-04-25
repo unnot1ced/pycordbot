@@ -9,6 +9,8 @@ import json
 import datetime
 import asyncio
 from aiohttp import web 
+import threading
+from flask import Flask
 
 load_dotenv()
 token = os.getenv('DISCORD_TOKEN')
@@ -38,10 +40,23 @@ async def start_webserver():
     await site.start()
     print(f"Web server started on port {PORT}")
 
+flask_app = Flask(__name__)
+FLASK_PORT = int(os.getenv('FLASK_PORT', 8000))
+
+@flask_app.route('/')
+def home():
+    return f"{bot.user.name if bot.user else 'Bot'} is alive! UptimeRobot can ping this endpoint."
+
+def run_flask():
+    flask_app.run(host='0.0.0.0', port=FLASK_PORT)
+
 @bot.event
 async def on_ready():
     print(f"YAYYY!! We are up and running:) {bot.user.name}")
     await start_webserver()
+
+    threading.Thread(target=run_flask, daemon=True).start()
+    print(f"Flask server started on port {FLASK_PORT} for UptimeRobot")
 
 
 @bot.event
