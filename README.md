@@ -37,7 +37,7 @@ Just click this link and you're good to go: [Add Pycordbot to your server](https
 1. Grab the code:
    ```sh
    git clone https://github.com/unnot1ced/pycordbot.git
-   cd DiscordBotTest
+   cd pycordbot
    ```
 
 2. Set up a virtual environment (totally recommended!):
