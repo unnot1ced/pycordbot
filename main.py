@@ -14,6 +14,8 @@ from flask import Flask
 import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import db
+import time
+import sys
 
 load_dotenv()
 token = os.getenv('DISCORD_TOKEN')
@@ -103,30 +105,60 @@ def save_xp_data():
     try:
         if firebase_admin._apps: 
             xp_ref = db.reference('/xp_data')
-            xp_ref.set(user_xp)
-            print(f"Saved XP data for {len(user_xp)} users to Firebase")
             
-            for user_id, xp in user_xp.items():
-                print(f"User {user_id}: {xp} XP, Level {calculate_level(xp)}")
+            print(f"About to save XP data: {len(user_xp)} users with data: {json.dumps(user_xp)[:100]}...")
+            
+            def transaction_update(current_data):
+                if current_data is None:
+                    return user_xp
+                for user_id, xp in user_xp.items():
+                    current_data[user_id] = xp
+                return current_data
+            
+            try:
+                xp_ref.transaction(transaction_update)
+                print(f"Successfully used transaction to save XP data for {len(user_xp)} users to Firebase")
+            except Exception as e:
+                print(f"Transaction failed: {e}, falling back to direct set")
+                xp_ref.set(user_xp)
                 
+            time.sleep(1)  
             verification = xp_ref.get()
-            if verification and len(verification) == len(user_xp):
-                print("Firebase save verified successfully!")
+            if verification:
+                all_verified = True
+                for user_id, xp in user_xp.items():
+                    if user_id not in verification or verification[user_id] != xp:
+                        all_verified = False
+                        print(f"Verification failed for user {user_id}: expected {xp}, got {verification.get(user_id, 'missing')}")
+                
+                if all_verified:
+                    print("Firebase save verified successfully!")
+                else:
+                    print("Firebase save verification partially failed!")
             else:
-                print("Firebase save verification failed!")
+                print("Firebase save verification completely failed - no data returned!")
         
         with open(XP_FILE, 'w') as f:
-            json.dump(user_xp, f)
+            json.dump(user_xp, f, indent=2)
             print(f"Saved XP data backup to local file")
+            
+        print(f"Current user_xp content (first 3 entries):")
+        entries = 0
+        for user_id, xp in user_xp.items():
+            if entries < 3:  
+                print(f"  User {user_id}: {xp} XP")
+                entries += 1
+            
     except Exception as e:
-        print(f"Error saving XP data: {e}")
+        print(f"Error saving XP data: {e}", file=sys.stderr)
         traceback.print_exc() 
         try:
             with open(XP_FILE, 'w') as f:
                 json.dump(user_xp, f)
                 print(f"Saved XP data to local file after Firebase failure")
         except Exception as e2:
-            print(f"Failed to save XP data anywhere: {e2}")
+            print(f"Failed to save XP data anywhere: {e2}", file=sys.stderr)
+            traceback.print_exc()
 
 def calculate_level(xp):
     return int((xp / 100) ** 0.5)
@@ -162,12 +194,15 @@ async def on_ready():
 async def periodic_save():
     """Periodically save XP data"""
     while True:
-        await asyncio.sleep(60)  
-        if user_xp:
-            print("Performing periodic XP data save...")
-            save_xp_data()
-            
-import traceback
+        try:
+            await asyncio.sleep(60)  
+            if user_xp:
+                print(f"Performing periodic XP data save at {datetime.datetime.now()}")
+                save_xp_data()
+                print(f"Periodic save completed at {datetime.datetime.now()}")
+        except Exception as e:
+            print(f"Error in periodic save: {e}")
+            traceback.print_exc()
 
 @bot.command()
 @commands.is_owner()
@@ -184,7 +219,6 @@ async def forcesave(ctx):
 async def on_member_join(member):
     await member.send(f"HIIIII!! :D, {member.name}!")
 
-
 @bot.event
 async def on_message(message):
     if message.author == bot.user:
@@ -197,9 +231,11 @@ async def on_message(message):
     if not message.author.bot and message.guild is not None:
         user_id = str(message.author.id)
         
-        if user_id not in user_xp:
+        if user_id in user_xp:
+            print(f"Before update: User {user_id} has {user_xp[user_id]} XP")
+        else:
+            print(f"Before update: User {user_id} is new, starting with 0 XP")
             user_xp[user_id] = 0
-            print(f"New user {user_id} added to XP system")
             
         old_level = calculate_level(user_xp[user_id])
         old_xp = user_xp[user_id]
@@ -207,11 +243,11 @@ async def on_message(message):
         xp_gain = random.randint(5, 15)
         user_xp[user_id] += xp_gain
         
-        # Log the XP change
-        print(f"User {user_id} gained {xp_gain} XP: {old_xp} -> {user_xp[user_id]}")
+        print(f"XP UPDATE: User {user_id} gained {xp_gain} XP: {old_xp} -> {user_xp[user_id]}")
         
-        # Save immediately after updating XP - this should help with persistence issues
+        print(f"Saving XP data after update for user {user_id}")
         save_xp_data()
+        print(f"Save complete. User {user_id} now has {user_xp[user_id]} XP")
         
         new_level = calculate_level(user_xp[user_id])
         
@@ -236,7 +272,6 @@ async def on_message(message):
                     print(f"Oh no, role {role_name} was not found in server {message.guild.name}")
 
     await bot.process_commands(message)
-
 
 @bot.command()
 async def level(ctx, member: discord.Member = None):
@@ -265,7 +300,6 @@ async def level(ctx, member: discord.Member = None):
     
     await ctx.send(embed=embed)
 
-
 @bot.command()
 async def ranks(ctx):
     embed = discord.Embed(
@@ -278,7 +312,6 @@ async def ranks(ctx):
         embed.add_field(name=f"Level {level}", value=role_name, inline=False)
         
     await ctx.send(embed=embed)
-
 
 @bot.command()
 async def hug(ctx, member: discord.Member = None):
@@ -298,7 +331,6 @@ async def hug(ctx, member: discord.Member = None):
             else:
                 await ctx.send(f"HUGGIES TO {member.mention} from {ctx.author.mention}!!!")
 
-
 @bot.command()
 async def slap(ctx, member: discord.Member = None):
     if member is None:
@@ -317,11 +349,9 @@ async def slap(ctx, member: discord.Member = None):
             else:
                 await ctx.send(f"{ctx.author.mention} slaps {member.mention}!")
 
-
 @bot.command()
 async def hello(ctx):
     await ctx.send(f"HIII {ctx.author.mention}!!! :D")
-
 
 @bot.command()
 async def assign(ctx):
@@ -332,7 +362,6 @@ async def assign(ctx):
     else:
         await ctx.send("Nooo something went wrong adding the role :(")
 
-
 @bot.command()
 async def remove(ctx):
     role = discord.utils.get(ctx.guild.roles, name=secret_role)
@@ -342,11 +371,9 @@ async def remove(ctx):
     else:
         await ctx.send("Nooo something went wrong removing the role:(")
 
-
 @bot.command()
 async def dm(ctx, *, msg):
     await ctx.author.send(f"LOOOKKKK u said: {msg} :D")
-
 
 @bot.command()
 async def cat(ctx):
@@ -360,7 +387,6 @@ async def cat(ctx):
             else:
                 await ctx.send("Oopsie! Couldn't find a kitty right now :(")
 
-
 @bot.command()
 async def dog(ctx):
     async with aiohttp.ClientSession() as session:
@@ -373,7 +399,6 @@ async def dog(ctx):
             else:
                 await ctx.send("Oopsie! Couldn't find a doggo right now :(")
 
-
 @bot.command()
 async def joke(ctx):
     async with aiohttp.ClientSession() as session:
@@ -383,7 +408,6 @@ async def joke(ctx):
                 await ctx.send(f"**{data['setup']}**\n\n||{data['punchline']}|| :sob:")
             else:
                 await ctx.send("Oopsie! My joke book is empty right now :(")
-
 
 @bot.command(aliases=['8ball'])
 async def magic8ball(ctx, *, question):
@@ -395,7 +419,6 @@ async def magic8ball(ctx, *, question):
         "My sources say noooo", "Very doubtful", "NOPE!"
     ]
     await ctx.send(f"🎱 **Question:** {question}\n**Answer:** {random.choice(responses)}")
-
 
 @bot.command()
 async def rps(ctx, choice=None):
@@ -446,14 +469,13 @@ async def rps(ctx, choice=None):
 
     else:
         await ctx.send(
-            "Please choose rock, paper, or scissors! You can do `!rps rock` or just `!rps` and then type your choice!")
+            "Please choose rock, paper, or scissors! You can do `!rps rock` (or paper/scissors) or just `!rps` and then type your choice!")
 
 
 @rps.error
 async def rps_error(ctx, error):
     await ctx.send(
         "To play Rock Paper Scissors, you can either:\n1. Type `!rps rock` (or paper/scissors)\n2. OR type `!rps` and then respond with your choice :D my favourite game")
-
 
 @bot.command()
 async def fact(ctx):
@@ -464,7 +486,6 @@ async def fact(ctx):
                 await ctx.send(f"**Random Fact:** {data['text']} :D")
             else:
                 await ctx.send("Oopsie! My fact book is empty right now :(")
-
 
 @bot.command()
 @commands.has_role(secret_role)
@@ -479,12 +500,10 @@ async def secretfact(ctx):
     ]
     await ctx.send(f"**🔮 SUPER SECRET FACT I like this one:D :** {random.choice(secret_facts)} :D")
 
-
 @secretfact.error
 async def secretfact_error(ctx, error):
     if isinstance(error, commands.MissingRole):
         await ctx.send("Uh oh, you need the special role to see these super secret facts :eyes:")
-
 
 @bot.event
 async def on_command_error(ctx, error):
@@ -508,7 +527,6 @@ async def on_command_error(ctx, error):
     else:
         logging.error(f"Unexpected error: {error}")
         await ctx.send("Oops! Something went wrong :( Please try again later!")
-
 
 @bot.command()
 async def guess(ctx):
@@ -542,7 +560,6 @@ async def guess(ctx):
 
     await ctx.send(f"Awww you ran out of attempts :( The number was {number}. Better luck next time!")
 
-
 @bot.command()
 async def poll(ctx, *, question):
     embed = discord.Embed(title="Question:D", description=question)
@@ -550,12 +567,10 @@ async def poll(ctx, *, question):
     await poll_message.add_reaction("👍")
     await poll_message.add_reaction("👎")
 
-
 @poll.error
 async def poll_error(ctx, error):
     if isinstance(error, commands.MissingRequiredArgument):
         await ctx.send("You need to provide a question for the poll! Try `!poll Should we play a game today?` :3")
-
 
 @bot.command()
 async def avatar(ctx, member: discord.Member = None):
@@ -564,12 +579,10 @@ async def avatar(ctx, member: discord.Member = None):
     embed.set_image(url=member.avatar.url if member.avatar else member.default_avatar.url)
     await ctx.send(embed=embed)
 
-
 @avatar.error
 async def avatar_error(ctx, error):
     if isinstance(error, commands.MemberNotFound):
         await ctx.send("I couldn't find that user :( Please make sure you spelled their name correctly!")
-
 
 @bot.command()
 async def flip(ctx):
@@ -649,7 +662,6 @@ async def wyr(ctx):
     await message.add_reaction("🅰️")
     await message.add_reaction("🅱️")
 
-
 @bot.command()
 async def remind(ctx, time, *, reminder="Reminder! :D"):
 
@@ -697,12 +709,10 @@ async def remind(ctx, time, *, reminder="Reminder! :D"):
     
     await ctx.send(f"Heyy {user.mention}, here's your reminder!! :3", embed=reminder_embed)
 
-
 @remind.error
 async def remind_error(ctx, error):
     if isinstance(error, commands.MissingRequiredArgument):
         await ctx.send("Please provide a time! Example: `!remind 10m Drink water!`")
-
 
 @bot.command()
 async def ship(ctx, user1: discord.Member, user2: discord.Member = None):
@@ -763,7 +773,6 @@ async def ship(ctx, user1: discord.Member, user2: discord.Member = None):
     
     await ctx.send(embed=embed)
 
-
 @ship.error
 async def ship_error(ctx, error):
     if isinstance(error, commands.MissingRequiredArgument):
@@ -771,5 +780,19 @@ async def ship_error(ctx, error):
     elif isinstance(error, commands.BadArgument):
         await ctx.send("I couldn't find that user! Make sure you're @mentioning them correctly!")
 
+# pure for debuging purposes
+@bot.command()
+@commands.is_owner()
+async def rawxp(ctx):
+    """View raw XP data (bot owner only)"""
+    if len(user_xp) == 0:
+        await ctx.send("No XP data found!")
+        return
+        
+    data_str = json.dumps(user_xp, indent=2)
+    if len(data_str) > 1900: 
+        await ctx.send(f"XP data (truncated, {len(user_xp)} users):\n```json\n{data_str[:1900]}...\n```")
+    else:
+        await ctx.send(f"XP data ({len(user_xp)} users):\n```json\n{data_str}\n```")
 
 bot.run(token, log_handler=handler, log_level=logging.DEBUG)
