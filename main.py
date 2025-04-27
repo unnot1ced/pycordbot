@@ -26,6 +26,41 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 
 secret_role = "Cutie"
 
+XP_FILE = "user_xp.json"
+
+level_roles = {
+    5: "Level 5",
+    10: "level 10",
+    20: "level 20",
+    50: "level 50"
+}
+
+user_xp = {}
+
+def load_xp_data():
+    global user_xp
+    try:
+        if os.path.exists(XP_FILE):
+            with open(XP_FILE, 'r') as f:
+                user_xp = json.load(f)
+                print(f"Loaded XP data for {len(user_xp)} users")
+    except Exception as e:
+        print(f"Error loading XP data: {e}")
+        user_xp = {}
+
+def save_xp_data():
+    try:
+        with open(XP_FILE, 'w') as f:
+            json.dump(user_xp, f)
+    except Exception as e:
+        print(f"Error saving XP data: {e}")
+
+def calculate_level(xp):
+    return int((xp / 100) ** 0.5)
+
+def xp_for_level(level):
+    return int(level ** 2 * 100)
+
 app = web.Application()
 
 async def handle_index(request):
@@ -40,23 +75,12 @@ async def start_webserver():
     await site.start()
     print(f"Web server started on port {PORT}")
 
-flask_app = Flask(__name__)
-FLASK_PORT = int(os.getenv('FLASK_PORT', 8000))
-
-@flask_app.route('/')
-def home():
-    return f"{bot.user.name if bot.user else 'Bot'} is alive! UptimeRobot can ping this endpoint."
-
-def run_flask():
-    flask_app.run(host='0.0.0.0', port=FLASK_PORT)
-
 @bot.event
 async def on_ready():
     print(f"YAYYY!! We are up and running:) {bot.user.name}")
-    await start_webserver()
 
-    threading.Thread(target=run_flask, daemon=True).start()
-    print(f"Flask server started on port {FLASK_PORT} for UptimeRobot")
+    load_xp_data()
+    await start_webserver()
 
 
 @bot.event
@@ -73,7 +97,123 @@ async def on_message(message):
         await message.delete()
         await message.channel.send(f"{message.author.mention} don't swear please:(")
 
+    if not message.author.bot and message.guild is not None:
+        user_id = str(message.author.id)
+        
+        if user_id not in user_xp:
+            user_xp[user_id] = 0
+            
+        old_level = calculate_level(user_xp[user_id])
+        
+        user_xp[user_id] += random.randint(5, 15)
+        
+        new_level = calculate_level(user_xp[user_id])
+        
+        save_xp_data()
+        
+        if new_level > old_level:
+            level_up_embed = discord.Embed(
+                title="🌟 LEVEL UP! 🌟",
+                description=f"WOOHOOOOOO {message.author.mention} just reached level **{new_level}** YIPEEE!!!",
+                color=discord.Color.gold()
+            )
+            level_up_embed.set_thumbnail(url=message.author.avatar.url if message.author.avatar else message.author.default_avatar.url)
+            await message.channel.send(embed=level_up_embed)
+            
+            if new_level in level_roles:
+                role_name = level_roles[new_level]
+                role = discord.utils.get(message.guild.roles, name=role_name)
+                
+                if role:
+                    await message.author.add_roles(role)
+                    await message.channel.send(f"✨YAYYYY {message.author.mention} has earned the **{role_name}** role! :D ✨")
+                else:
+
+                    print(f"Oh no, role {role_name} was not found in server {message.guild.name}")
+
     await bot.process_commands(message)
+
+
+@bot.command()
+async def level(ctx, member: discord.Member = None):
+    """Check your level or another user's level"""
+    member = member or ctx.author
+    user_id = str(member.id)
+    
+    if user_id not in user_xp:
+        return await ctx.send(f"{member.name} hasn't earned any XP yet :(")
+    
+    xp = user_xp[user_id]
+    level = calculate_level(xp)
+    next_level = level + 1
+    next_level_xp = xp_for_level(next_level)
+    current_level_xp = xp_for_level(level)
+    
+    progress = (xp - current_level_xp) / (next_level_xp - current_level_xp) * 100 if next_level_xp > current_level_xp else 100
+    
+    embed = discord.Embed(
+        title=f"{member.name}'s Level Stats :sparkles:",
+        color=discord.Color.blue()
+    )
+    embed.add_field(name="Level", value=str(level), inline=True)
+    embed.add_field(name="XP", value=f"{xp}/{next_level_xp}", inline=True)
+    embed.add_field(name="Progress to Level {}".format(next_level), value=f"{progress:.1f}%", inline=True)
+    embed.set_thumbnail(url=member.avatar.url if member.avatar else member.default_avatar.url)
+    
+    await ctx.send(embed=embed)
+
+
+@bot.command()
+async def ranks(ctx):
+    """Show available level ranks"""
+    embed = discord.Embed(
+        title="Level Ranks :trophy:",
+        description="Here are the special roles you can earn by leveling up!",
+        color=discord.Color.gold()
+    )
+    
+    for level, role_name in sorted(level_roles.items()):
+        embed.add_field(name=f"Level {level}", value=role_name, inline=False)
+        
+    await ctx.send(embed=embed)
+
+
+@bot.command()
+async def hug(ctx, member: discord.Member = None):
+    if member is None:
+        return await ctx.send("Who do you want to hug? Try `!hug @username :3`")
+    
+    async with aiohttp.ClientSession() as session:
+        async with session.get('https://api.waifu.pics/sfw/hug') as response:
+            if response.status == 200:
+                data = await response.json()
+                embed = discord.Embed(
+                    title=f"{ctx.author.name} gives {member.name} a big hug! :D",
+                    color=discord.Color.purple()
+                )
+                embed.set_image(url=data['url'])
+                await ctx.send(embed=embed)
+            else:
+                await ctx.send(f"HUGGIES TO {member.mention} from {ctx.author.mention}!!!")
+
+
+@bot.command()
+async def slap(ctx, member: discord.Member = None):
+    if member is None:
+        return await ctx.send("Who do you want to slap? Try `!slap @username`")
+    
+    async with aiohttp.ClientSession() as session:
+        async with session.get('https://api.waifu.pics/sfw/slap') as response:
+            if response.status == 200:
+                data = await response.json()
+                embed = discord.Embed(
+                    title=f"{ctx.author.name} slaps {member.name}!! ",
+                    color=discord.Color.red()
+                )
+                embed.set_image(url=data['url'])
+                await ctx.send(embed=embed)
+            else:
+                await ctx.send(f"{ctx.author.mention} slaps {member.mention}!")
 
 
 @bot.command()
