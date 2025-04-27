@@ -11,6 +11,9 @@ import asyncio
 from aiohttp import web 
 import threading
 from flask import Flask
+import firebase_admin
+from firebase_admin import credentials
+from firebase_admin import db
 
 load_dotenv()
 token = os.getenv('DISCORD_TOKEN')
@@ -37,48 +40,93 @@ level_roles = {
 
 user_xp = {}
 
+try:
+    if os.path.exists('firebase-key.json'):
+        print("Initializing Firebase with local key file...")
+        cred = credentials.Certificate('firebase-key.json')
+        firebase_admin.initialize_app(cred, {
+            'databaseURL': os.getenv('FIREBASE_DB_URL')
+        })
+        print(f"Firebase initialized with database URL: {os.getenv('FIREBASE_DB_URL')}")
+    else:
+        import base64
+        firebase_key_json = os.getenv('FIREBASE_KEY_JSON')
+        if firebase_key_json:
+            print("Initializing Firebase with environment key...")
+            firebase_key_data = json.loads(base64.b64decode(firebase_key_json).decode('utf-8'))
+            cred = credentials.Certificate(firebase_key_data)
+            firebase_admin.initialize_app(cred, {
+                'databaseURL': os.getenv('FIREBASE_DB_URL')
+            })
+            print(f"Firebase initialized with database URL: {os.getenv('FIREBASE_DB_URL')}")
+        else:
+            print("No Firebase credentials found - XP data will not persist between restarts!")
+except Exception as e:
+    print(f"Error initializing Firebase: {e}")
+
 def load_xp_data():
     global user_xp
     try:
-        if os.path.exists(XP_FILE):
-            with open(XP_FILE, 'r') as f:
-                content = f.read().strip()
-                if content: 
-                    user_xp = json.loads(content)
-                    print(f"Loaded XP data for {len(user_xp)} users")
-                else:
-                    print("XP file exists but is empty, starting with fresh data")
-                    user_xp = {}
+        if firebase_admin._apps:  
+            print("Loading XP data from Firebase...")
+            xp_ref = db.reference('/xp_data')
+            
+            firebase_data = xp_ref.get()
+            if firebase_data:
+                user_xp = firebase_data
+                print(f"Successfully loaded XP data for {len(user_xp)} users from Firebase")
+                for user_id, xp in user_xp.items():
+                    print(f"User {user_id}: {xp} XP, Level {calculate_level(xp)}")
+            else:
+                print("No XP data found in Firebase, starting fresh")
+                user_xp = {}
         else:
-            print(f"XP file not found at {XP_FILE}, creating new file")
-            with open(XP_FILE, 'w') as f:
-                json.dump({}, f)
-            user_xp = {}
-    except json.JSONDecodeError as e:
-        print(f"Error decoding JSON from XP file: {e}")
-        if os.path.exists(XP_FILE):
-            backup_file = f"{XP_FILE}.bak.{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
-            os.rename(XP_FILE, backup_file)
-            print(f"Created backup of corrupted XP file at {backup_file}")
-        user_xp = {}
+            print("Firebase not initialized, trying to load from local file...")
+            if os.path.exists(XP_FILE):
+                with open(XP_FILE, 'r') as f:
+                    content = f.read().strip()
+                    if content: 
+                        user_xp = json.loads(content)
+                        print(f"Loaded XP data for {len(user_xp)} users from local file")
+                    else:
+                        print("XP file exists but is empty, starting fresh")
+                        user_xp = {}
+            else:
+                print(f"XP file not found at {XP_FILE}, starting fresh")
+                user_xp = {}
     except Exception as e:
         print(f"Error loading XP data: {e}")
+        traceback.print_exc()  
         user_xp = {}
 
 def save_xp_data():
     try:
+        if firebase_admin._apps: 
+            xp_ref = db.reference('/xp_data')
+            xp_ref.set(user_xp)
+            print(f"Saved XP data for {len(user_xp)} users to Firebase")
+            
+            for user_id, xp in user_xp.items():
+                print(f"User {user_id}: {xp} XP, Level {calculate_level(xp)}")
+                
+            verification = xp_ref.get()
+            if verification and len(verification) == len(user_xp):
+                print("Firebase save verified successfully!")
+            else:
+                print("Firebase save verification failed!")
+        
         with open(XP_FILE, 'w') as f:
             json.dump(user_xp, f)
-            print(f"Saved XP data for {len(user_xp)} users")
+            print(f"Saved XP data backup to local file")
     except Exception as e:
         print(f"Error saving XP data: {e}")
-        os.makedirs(os.path.dirname(os.path.abspath(XP_FILE)), exist_ok=True)
+        traceback.print_exc() 
         try:
             with open(XP_FILE, 'w') as f:
                 json.dump(user_xp, f)
-                print(f"Successfully saved XP data after creating directory")
+                print(f"Saved XP data to local file after Firebase failure")
         except Exception as e2:
-            print(f"Still couldn't save XP data after retry: {e2}")
+            print(f"Failed to save XP data anywhere: {e2}")
 
 def calculate_level(xp):
     return int((xp / 100) ** 0.5)
@@ -103,18 +151,34 @@ async def start_webserver():
 @bot.event
 async def on_ready():
     print(f"YAYYY!! We are up and running:) {bot.user.name}")
-
+    
     load_xp_data()
+    
     await start_webserver()
     
     bot.loop.create_task(periodic_save())
+    print("Periodic save task started")
 
 async def periodic_save():
+    """Periodically save XP data"""
     while True:
-        await asyncio.sleep(300) 
-        if user_xp:  
+        await asyncio.sleep(60)  
+        if user_xp:
             print("Performing periodic XP data save...")
             save_xp_data()
+            
+import traceback
+
+@bot.command()
+@commands.is_owner()
+async def forcesave(ctx):
+    """Force save XP data (bot owner only)"""
+    try:
+        save_xp_data()
+        await ctx.send("XP data forcibly saved!")
+    except Exception as e:
+        await ctx.send(f"Error saving XP data: {e}")
+        traceback.print_exc()
 
 @bot.event
 async def on_member_join(member):
@@ -135,14 +199,21 @@ async def on_message(message):
         
         if user_id not in user_xp:
             user_xp[user_id] = 0
+            print(f"New user {user_id} added to XP system")
             
         old_level = calculate_level(user_xp[user_id])
+        old_xp = user_xp[user_id]
         
-        user_xp[user_id] += random.randint(5, 15)
+        xp_gain = random.randint(5, 15)
+        user_xp[user_id] += xp_gain
+        
+        # Log the XP change
+        print(f"User {user_id} gained {xp_gain} XP: {old_xp} -> {user_xp[user_id]}")
+        
+        # Save immediately after updating XP - this should help with persistence issues
+        save_xp_data()
         
         new_level = calculate_level(user_xp[user_id])
-        
-        save_xp_data()
         
         if new_level > old_level:
             level_up_embed = discord.Embed(
