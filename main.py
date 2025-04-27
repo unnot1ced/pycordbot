@@ -487,4 +487,182 @@ async def flip(ctx):
     await ctx.send(embed=embed)
 
 
+@bot.command()
+async def wyr(ctx):
+    """Would You Rather - Get a random WYR question"""
+    async with aiohttp.ClientSession() as session:
+        async with session.get('https://would-you-rather-api.abaanshanid.repl.co/') as response:
+            if response.status == 200:
+                data = await response.json()
+                options = data['data'].split('would you rather ')
+                if len(options) < 2:
+                    options = data['data'].split(' or ')
+                
+                if len(options) < 2:
+                    option_a = "Option A: " + data['data']
+                    option_b = "Option B: Something else"
+                else:
+                    option_a = "Option A: " + options[1].split(' or ')[0].strip()
+                    option_b = "Option B: " + options[1].split(' or ')[1].strip().rstrip('?')
+                
+                embed = discord.Embed(
+                    title="Would You Rather...? 🤔",
+                    description="React to choose!",
+                    color=discord.Color.blue()
+                )
+                embed.add_field(name="🅰️", value=option_a, inline=False)
+                embed.add_field(name="🅱️", value=option_b, inline=False)
+                
+                message = await ctx.send(embed=embed)
+                await message.add_reaction("🅰️")
+                await message.add_reaction("🅱️")
+            else:
+                wyr_questions = [
+                    ["Eat a pizza with pineapple", "Eat a burger with chocolate sauce"],
+                    ["Have the ability to talk to animals", "Have the ability to speak all human languages"],
+                    ["Be able to teleport anywhere", "Be able to read minds"],
+                    ["Live in the future", "Live in the past"],
+                    ["Be famous for your talent", "Be incredibly rich but unknown"],
+                    ["Have unlimited food", "Have unlimited money"],
+                    ["Be able to fly", "Be invisible whenever you want"],
+                ]
+                options = random.choice(wyr_questions)
+                
+                embed = discord.Embed(
+                    title="Would You Rather...? 🤔", 
+                    description="React to choose!",
+                    color=discord.Color.blue()
+                )
+                embed.add_field(name="🅰️", value=f"Option A: {options[0]}", inline=False)
+                embed.add_field(name="🅱️", value=f"Option B: {options[1]}", inline=False)
+                
+                message = await ctx.send(embed=embed)
+                await message.add_reaction("🅰️")
+                await message.add_reaction("🅱️")
+
+
+@bot.command()
+async def remind(ctx, time, *, reminder="Reminder!"):
+    """Set a reminder
+    Example: !remind 10m Drink water!"""
+    
+    user = ctx.author
+    
+    time_convert = {"s": 1, "m": 60, "h": 3600, "d": 86400}
+    time_unit = time[-1].lower()
+    
+    if time_unit not in time_convert:
+        return await ctx.send("Please use s, m, h, or d for seconds, minutes, hours, or days! Example: `10m`")
+    
+    try:
+        amount = int(time[:-1])
+    except ValueError:
+        return await ctx.send("Please provide a valid number! Example: `10m`")
+    
+    seconds = amount * time_convert[time_unit]
+    
+    embed = discord.Embed(
+        title="⏰ Reminder Set!",
+        description=f"I'll remind you about: **{reminder}**",
+        color=discord.Color.blue()
+    )
+    
+    if time_unit == "s":
+        time_text = f"{amount} second(s)"
+    elif time_unit == "m":
+        time_text = f"{amount} minute(s)"
+    elif time_unit == "h":
+        time_text = f"{amount} hour(s)"
+    else:
+        time_text = f"{amount} day(s)"
+    
+    embed.add_field(name="⏱️ Time", value=time_text)
+    await ctx.send(embed=embed)
+    
+    await asyncio.sleep(seconds)
+    
+    reminder_embed = discord.Embed(
+        title="REMINDER!! ",
+        description=f"{reminder}",
+        color=discord.Color.red()
+    )
+    
+    await ctx.send(f"Hey {user.mention}, here's your reminder!!", embed=reminder_embed)
+
+
+@remind.error
+async def remind_error(ctx, error):
+    if isinstance(error, commands.MissingRequiredArgument):
+        await ctx.send("Please provide a time! Example: `!remind 10m Drink water!`")
+
+
+@bot.command()
+async def ship(ctx, user1: discord.Member, user2: discord.Member = None):
+    """Calculate relationship compatibility between two users
+    Example: !ship @user1 @user2"""
+    
+    if user2 is None:
+        user2 = user1
+        user1 = ctx.author
+    
+    if user1.id == user2.id:
+        ship_percentage = 100
+    else:
+        combined_id = str(min(user1.id, user2.id)) + str(max(user1.id, user2.id))
+        seed = int(combined_id) % 10000  
+        random.seed(seed)
+        ship_percentage = random.randint(0, 100)
+        random.seed() 
+    
+    name1 = user1.display_name
+    name2 = user2.display_name
+    first_half = name1[:len(name1)//2]
+    second_half = name2[len(name2)//2:]
+    ship_name = first_half + second_half
+    
+    if ship_percentage < 20:
+        color = discord.Color.red()
+        message = "Uh oh.. Maybe just be friends :("
+        emoji = "💔"
+    elif ship_percentage < 40:
+        color = discord.Color.orange()
+        message = "Hmm, could be better! :3"
+        emoji = "🧡"
+    elif ship_percentage < 60:
+        color = discord.Color.yellow()
+        message = "Ooooo ;) You might have something there!"
+        emoji = "💫"
+    elif ship_percentage < 80:
+        color = discord.Color.green()
+        message = "WOAHHHHH :o You two would be so cute together!!"
+        emoji = "💚"
+    elif ship_percentage < 100:
+        color = discord.Color.purple()
+        message = "WOWIE this is insane! You two are meant to be!!"
+        emoji = "💜"
+    else:
+        color = discord.Color.magenta()
+        message = "PERFECT MATCH!! TRUE LOVE!!"
+        emoji = "💞"
+    
+    embed = discord.Embed(
+        title=f"{emoji} Relationship Calculator {emoji}",
+        description=f"**{user1.display_name}** + **{user2.display_name}** = **{ship_name}**",
+        color=color
+    )
+    
+    embed.add_field(name="Compatibility", value=f"**{ship_percentage}%**", inline=True)
+    embed.add_field(name="Result", value=message, inline=True)
+    
+    await ctx.send(embed=embed)
+
+
+@ship.error
+async def ship_error(ctx, error):
+    if isinstance(error, commands.MissingRequiredArgument):
+        await ctx.send("You need to mention at least one user! Example: `!ship @user`")
+    elif isinstance(error, commands.BadArgument):
+        await ctx.send("I couldn't find that user! Make sure you're @mentioning them correctly!")
+
+
 bot.run(token, log_handler=handler, log_level=logging.DEBUG)
