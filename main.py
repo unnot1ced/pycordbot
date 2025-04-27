@@ -486,65 +486,82 @@ async def flip(ctx):
 
     await ctx.send(embed=embed)
 
-
+# All the wyr questions are in the list below this is pure for now, since I can't host multiple files on render.com yet. This will be optimized later. 
 @bot.command()
 async def wyr(ctx):
-    """Would You Rather - Get a random WYR question"""
+    """Would You Rather - Presents two crazy choices"""
     async with aiohttp.ClientSession() as session:
-        async with session.get('https://would-you-rather-api.abaanshanid.repl.co/') as response:
-            if response.status == 200:
-                data = await response.json()
-                options = data['data'].split('would you rather ')
-                if len(options) < 2:
-                    options = data['data'].split(' or ')
-                
-                if len(options) < 2:
-                    option_a = "Option A: " + data['data']
-                    option_b = "Option B: Something else"
-                else:
-                    option_a = "Option A: " + options[1].split(' or ')[0].strip()
-                    option_b = "Option B: " + options[1].split(' or ')[1].strip().rstrip('?')
-                
-                embed = discord.Embed(
-                    title="Would You Rather...? 🤔",
-                    description="React to choose!",
-                    color=discord.Color.blue()
-                )
-                embed.add_field(name="🅰️", value=option_a, inline=False)
-                embed.add_field(name="🅱️", value=option_b, inline=False)
-                
-                message = await ctx.send(embed=embed)
-                await message.add_reaction("🅰️")
-                await message.add_reaction("🅱️")
-            else:
-                wyr_questions = [
-                    ["Eat a pizza with pineapple", "Eat a burger with chocolate sauce"],
-                    ["Have the ability to talk to animals", "Have the ability to speak all human languages"],
-                    ["Be able to teleport anywhere", "Be able to read minds"],
-                    ["Live in the future", "Live in the past"],
-                    ["Be famous for your talent", "Be incredibly rich but unknown"],
-                    ["Have unlimited food", "Have unlimited money"],
-                    ["Be able to fly", "Be invisible whenever you want"],
-                ]
-                options = random.choice(wyr_questions)
-                
-                embed = discord.Embed(
-                    title="Would You Rather...? 🤔", 
-                    description="React to choose!",
-                    color=discord.Color.blue()
-                )
-                embed.add_field(name="🅰️", value=f"Option A: {options[0]}", inline=False)
-                embed.add_field(name="🅱️", value=f"Option B: {options[1]}", inline=False)
-                
-                message = await ctx.send(embed=embed)
-                await message.add_reaction("🅰️")
-                await message.add_reaction("🅱️")
+        try:
+            async with session.get('https://api.truthordarebot.xyz/v1/wyr') as response:
+                if response.status == 200:
+                    data = await response.json()
+                    question = data.get("question", "")
+                    
+                    parts = question.split("would you rather")
+                    if len(parts) >= 2:
+                        options_part = parts[1].strip()
+                        options = options_part.split(" or ")
+                        if len(options) >= 2:
+                            option_a = options[0].strip().rstrip("?")
+                            option_b = options[1].strip().rstrip("?")
+                            
+                            embed = discord.Embed(
+                                title="Would You Rather...? 🤔",
+                                description="React to choose!",
+                                color=discord.Color.blue()
+                            )
+                            embed.add_field(name="🅰️", value=f"Option A: {option_a}", inline=False)
+                            embed.add_field(name="🅱️", value=f"Option B: {option_b}", inline=False)
+                            
+                            message = await ctx.send(embed=embed)
+                            await message.add_reaction("🅰️")
+                            await message.add_reaction("🅱️")
+                            return
+        except Exception as e:
+            print(f"API error in wyr command: {e}")
+    
+  # this is pure for backup in case the api fails or gets taken down.
+    wyr_questions = [
+        ["Eat a pizza with pineapple", "Eat a burger with chocolate sauce"],
+        ["Have the ability to talk to animals", "Have the ability to speak all human languages"],
+        ["Be able to teleport anywhere", "Be able to read minds"],
+        ["Live in the future", "Live in the past"],
+        ["Always have to say everything on your mind", "Never speak again"],
+        ["Be famous for your talent", "Be incredibly rich but unknown"],
+        ["Never use social media again", "Never watch movies or TV shows again"],
+        ["Have unlimited food", "Have unlimited money"],
+        ["Be able to fly", "Be invisible whenever you want"],
+        ["Live underwater", "Live in space"],
+        ["Always be slightly too hot", "Always be slightly too cold"],
+        ["Have hands for feet", "Have feet for hands"],
+        ["Know how you will die", "Know when you will die"],
+        ["Be covered in fur", "Be covered in scales"],
+        ["Never sleep again", "Sleep for 12 hours every day and never feel tired"],
+        ["Be a famous actor", "Be a famous musician"],
+        ["Travel to the past", "Travel to the future"],
+        ["Lose the ability to read", "Lose the ability to speak"],
+        ["Give up your smartphone forever", "Give up dessert forever"],
+        ["Be 10 years older", "Be 10 years younger"]
+    ]
+    
+    options = random.choice(wyr_questions)
+    
+    embed = discord.Embed(
+        title="Would You Rather...? 🤔",
+        description="React to choose!",
+        color=discord.Color.blue()
+    )
+    embed.add_field(name="🅰️", value=f"Option A: {options[0]}", inline=False)
+    embed.add_field(name="🅱️", value=f"Option B: {options[1]}", inline=False)
+    
+    message = await ctx.send(embed=embed)
+    await message.add_reaction("🅰️")
+    await message.add_reaction("🅱️")
 
 
 @bot.command()
-async def remind(ctx, time, *, reminder="Reminder!"):
-    """Set a reminder
-    Example: !remind 10m Drink water!"""
+async def remind(ctx, time, *, reminder="Reminder! :D"):
+
     
     user = ctx.author
     
@@ -562,7 +579,7 @@ async def remind(ctx, time, *, reminder="Reminder!"):
     seconds = amount * time_convert[time_unit]
     
     embed = discord.Embed(
-        title="⏰ Reminder Set!",
+        title="Reminder Set! :3",
         description=f"I'll remind you about: **{reminder}**",
         color=discord.Color.blue()
     )
@@ -587,7 +604,7 @@ async def remind(ctx, time, *, reminder="Reminder!"):
         color=discord.Color.red()
     )
     
-    await ctx.send(f"Hey {user.mention}, here's your reminder!!", embed=reminder_embed)
+    await ctx.send(f"Heyy {user.mention}, here's your reminder!! :3", embed=reminder_embed)
 
 
 @remind.error
@@ -598,8 +615,7 @@ async def remind_error(ctx, error):
 
 @bot.command()
 async def ship(ctx, user1: discord.Member, user2: discord.Member = None):
-    """Calculate relationship compatibility between two users
-    Example: !ship @user1 @user2"""
+
     
     if user2 is None:
         user2 = user1
