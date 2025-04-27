@@ -110,7 +110,6 @@ async def on_ready():
     bot.loop.create_task(periodic_save())
 
 async def periodic_save():
-    """Periodically save XP data as a backup measure"""
     while True:
         await asyncio.sleep(300) 
         if user_xp:  
@@ -170,7 +169,6 @@ async def on_message(message):
 
 @bot.command()
 async def level(ctx, member: discord.Member = None):
-    """Check your level or another user's level"""
     member = member or ctx.author
     user_id = str(member.id)
     
@@ -199,7 +197,6 @@ async def level(ctx, member: discord.Member = None):
 
 @bot.command()
 async def ranks(ctx):
-    """Show available level ranks"""
     embed = discord.Embed(
         title="Level Ranks :trophy:",
         description="Here are the special roles you can earn by leveling up!",
