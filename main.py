@@ -42,8 +42,25 @@ def load_xp_data():
     try:
         if os.path.exists(XP_FILE):
             with open(XP_FILE, 'r') as f:
-                user_xp = json.load(f)
-                print(f"Loaded XP data for {len(user_xp)} users")
+                content = f.read().strip()
+                if content: 
+                    user_xp = json.loads(content)
+                    print(f"Loaded XP data for {len(user_xp)} users")
+                else:
+                    print("XP file exists but is empty, starting with fresh data")
+                    user_xp = {}
+        else:
+            print(f"XP file not found at {XP_FILE}, creating new file")
+            with open(XP_FILE, 'w') as f:
+                json.dump({}, f)
+            user_xp = {}
+    except json.JSONDecodeError as e:
+        print(f"Error decoding JSON from XP file: {e}")
+        if os.path.exists(XP_FILE):
+            backup_file = f"{XP_FILE}.bak.{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
+            os.rename(XP_FILE, backup_file)
+            print(f"Created backup of corrupted XP file at {backup_file}")
+        user_xp = {}
     except Exception as e:
         print(f"Error loading XP data: {e}")
         user_xp = {}
@@ -52,8 +69,16 @@ def save_xp_data():
     try:
         with open(XP_FILE, 'w') as f:
             json.dump(user_xp, f)
+            print(f"Saved XP data for {len(user_xp)} users")
     except Exception as e:
         print(f"Error saving XP data: {e}")
+        os.makedirs(os.path.dirname(os.path.abspath(XP_FILE)), exist_ok=True)
+        try:
+            with open(XP_FILE, 'w') as f:
+                json.dump(user_xp, f)
+                print(f"Successfully saved XP data after creating directory")
+        except Exception as e2:
+            print(f"Still couldn't save XP data after retry: {e2}")
 
 def calculate_level(xp):
     return int((xp / 100) ** 0.5)
@@ -81,7 +106,16 @@ async def on_ready():
 
     load_xp_data()
     await start_webserver()
+    
+    bot.loop.create_task(periodic_save())
 
+async def periodic_save():
+    """Periodically save XP data as a backup measure"""
+    while True:
+        await asyncio.sleep(300) 
+        if user_xp:  
+            print("Performing periodic XP data save...")
+            save_xp_data()
 
 @bot.event
 async def on_member_join(member):
@@ -473,12 +507,12 @@ async def avatar_error(ctx, error):
 async def flip(ctx):
     result = random.choice(["Heads", "Tails"])
 
-    heads_url = "https://i.imgur.com/HavOS71.png"
+    heads_url = "https://i.imgur.com/jTGm7MF.png"
     tails_url = "https://i.imgur.com/u1pmQMV.png"
 
     embed = discord.Embed(
         title="Coin Flip!",
-        description=f"The coin landed on... **{result}**!",
+        description=f"The coin landed on... **{result}**! :o",
         color=discord.Color.gold()
     )
 
@@ -486,41 +520,10 @@ async def flip(ctx):
 
     await ctx.send(embed=embed)
 
-# All the wyr questions are in the list below this is pure for now, since I can't host multiple files on render.com yet. This will be optimized later. 
 @bot.command()
 async def wyr(ctx):
     """Would You Rather - Presents two crazy choices"""
-    async with aiohttp.ClientSession() as session:
-        try:
-            async with session.get('https://api.truthordarebot.xyz/v1/wyr') as response:
-                if response.status == 200:
-                    data = await response.json()
-                    question = data.get("question", "")
-                    
-                    parts = question.split("would you rather")
-                    if len(parts) >= 2:
-                        options_part = parts[1].strip()
-                        options = options_part.split(" or ")
-                        if len(options) >= 2:
-                            option_a = options[0].strip().rstrip("?")
-                            option_b = options[1].strip().rstrip("?")
-                            
-                            embed = discord.Embed(
-                                title="Would You Rather...? 🤔",
-                                description="React to choose!",
-                                color=discord.Color.blue()
-                            )
-                            embed.add_field(name="🅰️", value=f"Option A: {option_a}", inline=False)
-                            embed.add_field(name="🅱️", value=f"Option B: {option_b}", inline=False)
-                            
-                            message = await ctx.send(embed=embed)
-                            await message.add_reaction("🅰️")
-                            await message.add_reaction("🅱️")
-                            return
-        except Exception as e:
-            print(f"API error in wyr command: {e}")
-    
-  # this is pure for backup in case the api fails or gets taken down.
+    # static list of questions for now since the api for this doesnt work in my case ill be researching this later.
     wyr_questions = [
         ["Eat a pizza with pineapple", "Eat a burger with chocolate sauce"],
         ["Have the ability to talk to animals", "Have the ability to speak all human languages"],
@@ -541,7 +544,27 @@ async def wyr(ctx):
         ["Travel to the past", "Travel to the future"],
         ["Lose the ability to read", "Lose the ability to speak"],
         ["Give up your smartphone forever", "Give up dessert forever"],
-        ["Be 10 years older", "Be 10 years younger"]
+        ["Be 10 years older", "Be 10 years younger"],
+        ["Have super strength", "Have super speed"],
+        ["Always be overdressed", "Always be underdressed"],
+        ["Live without the internet", "Live without AC/heating"],
+        ["Be able to see 10 minutes into the future", "Be able to see 10 minutes into the past"],
+        ["Always have to tell the truth", "Always have to lie"],
+        ["Be fluent in all languages", "Be a master of all musical instruments"],
+        ["Have one real-life 'get out of jail free' card", "Have one real-life 'undo button'"],
+        ["Have all traffic lights turn green for you", "Never have to stand in line again"],
+        ["Save 100 strangers", "Save 1 loved one"],
+        ["Fight 1 horse-sized duck", "Fight 100 duck-sized horses"],
+        ["Have unlimited sushi", "Have unlimited tacos"],
+        ["Be a superhero", "Be a wizard"],
+        ["Live in a world with zombies", "Live in a world with aliens"],
+        ["Never have to clean again", "Never have to do laundry again"],
+        ["Be the funniest person alive", "Be the smartest person alive"],
+        ["Know when you'll die", "Know how you'll die"],
+        ["Win the lottery", "Live twice as long"],
+        ["Be famous", "Be anonymous forever"],
+        ["Always have bad WiFi", "Always have bad phone signal"],
+        ["Be a dragon", "Be a unicorn"]
     ]
     
     options = random.choice(wyr_questions)
@@ -569,18 +592,18 @@ async def remind(ctx, time, *, reminder="Reminder! :D"):
     time_unit = time[-1].lower()
     
     if time_unit not in time_convert:
-        return await ctx.send("Please use s, m, h, or d for seconds, minutes, hours, or days! Example: `10m`")
+        return await ctx.send("Please use s, m, h, or d for seconds, minutes, hours, or days! Example: `10m` :3")
     
     try:
         amount = int(time[:-1])
     except ValueError:
-        return await ctx.send("Please provide a valid number! Example: `10m`")
+        return await ctx.send("Please provide a valid number! Example: `10m` :3")
     
     seconds = amount * time_convert[time_unit]
     
     embed = discord.Embed(
         title="Reminder Set! :3",
-        description=f"I'll remind you about: **{reminder}**",
+        description=f"I'll remind you about: **{reminder} :D**",
         color=discord.Color.blue()
     )
     
