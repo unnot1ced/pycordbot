@@ -486,7 +486,7 @@ async def poll(ctx, *, question):
 @poll.error
 async def poll_error(ctx, error):
     if isinstance(error, commands.MissingRequiredArgument):
-        await ctx.send("You need to provide a question for the poll! Try `!poll Should we play a game today?`")
+        await ctx.send("You need to provide a question for the poll! Try `!poll Should we play a game today?` :3")
 
 
 @bot.command()
@@ -570,8 +570,8 @@ async def wyr(ctx):
     options = random.choice(wyr_questions)
     
     embed = discord.Embed(
-        title="Would You Rather...? 🤔",
-        description="React to choose!",
+        title="Would You Rather...? :3",
+        description="React to choose! :)",
         color=discord.Color.blue()
     )
     embed.add_field(name="🅰️", value=f"Option A: {options[0]}", inline=False)
