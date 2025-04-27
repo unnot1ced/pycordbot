@@ -8,14 +8,15 @@ This is a fun little Discord bot I made using the [discord.py](https://discordpy
 - Get your bot connected to Discord servers
 - Make it reply to messages - it's so cool when it works!
 - Set up commands with a prefix - super handy :p
-
-Great for learning and playing around with - build something even cooler on top of it!
+- Tracks messages with a fun leveling system:)
 
 ## Cool Stuff :D
 
 ![Python](https://img.shields.io/badge/python-3.10-blue)
 ![discord.py](https://img.shields.io/badge/discord.py-2.3.2-blue)
 ![Build](https://img.shields.io/badge/build-passing-brightgreen)
+![Render](https://img.shields.io/badge/Render-Valkey%208.1-purple)
+![Firebase](https://img.shields.io/badge/Firebase-6.8.0-orange)
 
 ## Getting Started :)
 
