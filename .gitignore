@@ -1,3 +1,5 @@
 .env
 .idea
 user_xp.json
+.gitattributes
+discord.log
