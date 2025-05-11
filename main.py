@@ -226,7 +226,7 @@ async def periodic_save():
 async def on_message(message):
     if message.author == bot.user:
         return
-
+# if u want to change or add more swearwords add them in the list/array above. if u want to remove them just delete them from the list/array above.
     message_lower = message.content.lower()
     for word in swear_words:
         if word in message_lower.split(): 
@@ -275,6 +275,34 @@ async def on_message(message):
                     await message.channel.send(f"✨YAYYYY {message.author.mention} has earned the **{role_name}** role! :D ✨")
                 else:
                     print(f"Oh no, role {role_name} was not found in server {message.guild.name}")
+
+    await bot.process_commands(message)
+
+# this is pure for debugging purposes DO NOT USE THIS OR IT CAN DESYNC THE BOT. 
+@bot.command(name="forcesave")
+@commands.is_owner()
+async def forcesave(ctx):
+    """Force save XP data (bot owner only)"""
+    try:
+        save_xp_data()
+        await ctx.send("XP data forcibly saved!")
+    except Exception as e:
+        await ctx.send(f"Error saving XP data: {e}")
+        traceback.print_exc()
+
+@bot.command(name="rawxp")
+@commands.is_owner()
+async def rawxp(ctx):
+    """View raw XP data (bot owner only)"""
+    if len(user_xp) == 0:
+        await ctx.send("No XP data found!")
+        return
+        
+    data_str = json.dumps(user_xp, indent=2)
+    if len(data_str) > 1900: 
+        await ctx.send(f"XP data (truncated, {len(user_xp)} users):\n```json\n{data_str[:1900]}...\n```")
+    else:
+        await ctx.send(f"XP data ({len(user_xp)} users):\n```json\n{data_str}\n```")
 
 @bot.hybrid_command(name="level", description="Check your level or another user's level")
 async def level(ctx, member: discord.Member = None):
@@ -693,34 +721,3 @@ async def ship(ctx, user1: discord.Member, user2: discord.Member = None):
     embed.add_field(name="Result", value=message, inline=True)
     
     await ctx.send(embed=embed)
-
-@bot.command(name="forcesave", description="Force save XP data (bot owner only)")
-async def forcesave(ctx):
-
-    if ctx.author.id != bot.owner_id:
-        return await ctx.send("Sorry, only the bot owner can use this command.", ephemeral=True)
-    
-    try:
-        save_xp_data()
-        await ctx.send("XP data forcibly saved!")
-    except Exception as e:
-        await ctx.send(f"Error saving XP data: {e}")
-        traceback.print_exc()
-
-@bot.command(name="rawxp", description="View raw XP data (bot owner only)")
-async def rawxp(ctx):
-
-    if ctx.author.id != bot.owner_id:
-        return await ctx.send("Sorry, only the bot owner can use this command.", ephemeral=True)
-    
-    if len(user_xp) == 0:
-        await ctx.send("No XP data found!")
-        return
-        
-    data_str = json.dumps(user_xp, indent=2)
-    if len(data_str) > 1900: 
-        await ctx.send(f"XP data (truncated, {len(user_xp)} users):\n```json\n{data_str[:1900]}...\n```")
-    else:
-        await ctx.send(f"XP data ({len(user_xp)} users):\n```json\n{data_str}\n```")
-
-bot.run(token, log_handler=handler, log_level=logging.DEBUG)
