@@ -1,5 +1,5 @@
 import discord
-from discord import option
+from discord import app_commands
 from discord.ext import commands
 import logging
 from dotenv import load_dotenv
@@ -29,7 +29,8 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 
-bot = discord.Bot(intents=intents)
+
+bot = commands.Bot(command_prefix="!", intents=intents)
 
 secret_role = "Cutie"
 
@@ -195,6 +196,12 @@ async def start_webserver():
 async def on_ready():
     print(f"YAYYY!! We are up and running:) {bot.user.name}")
     
+    try:
+        synced = await bot.tree.sync()
+        print(f"Synced {len(synced)} command(s)")
+    except Exception as e:
+        print(f"Failed to sync commands: {e}")
+    
     load_xp_data()
     
     await start_webserver()
@@ -269,14 +276,13 @@ async def on_message(message):
                 else:
                     print(f"Oh no, role {role_name} was not found in server {message.guild.name}")
 
-@bot.slash_command(name="level", description="Check your level or another user's level")
-@option("member", discord.Member, description="Member to check level for", required=False)
+@bot.hybrid_command(name="level", description="Check your level or another user's level")
 async def level(ctx, member: discord.Member = None):
     member = member or ctx.author
     user_id = str(member.id)
     
     if user_id not in user_xp:
-        return await ctx.respond(f"{member.name} hasn't earned any XP yet :(")
+        return await ctx.send(f"{member.name} hasn't earned any XP yet :(")
     
     xp = user_xp[user_id]
     level = calculate_level(xp)
@@ -295,9 +301,9 @@ async def level(ctx, member: discord.Member = None):
     embed.add_field(name="Progress to Level {}".format(next_level), value=f"{progress:.1f}%", inline=True)
     embed.set_thumbnail(url=member.avatar.url if member.avatar else member.default_avatar.url)
     
-    await ctx.respond(embed=embed)
+    await ctx.send(embed=embed)
 
-@bot.slash_command(name="ranks", description="See available level ranks")
+@bot.hybrid_command(name="ranks", description="See available level ranks")
 async def ranks(ctx):
     embed = discord.Embed(
         title="Level Ranks :trophy:",
@@ -308,11 +314,13 @@ async def ranks(ctx):
     for level, role_name in sorted(level_roles.items()):
         embed.add_field(name=f"Level {level}", value=role_name, inline=False)
         
-    await ctx.respond(embed=embed)
+    await ctx.send(embed=embed)
 
-@bot.slash_command(name="hug", description="Give someone a big hug!")
-@option("member", discord.Member, description="Member to hug", required=True)
+@bot.hybrid_command(name="hug", description="Give someone a big hug!")
 async def hug(ctx, member: discord.Member):
+    if not member:
+        return await ctx.send("Please mention someone to hug!")
+        
     async with aiohttp.ClientSession() as session:
         async with session.get('https://api.waifu.pics/sfw/hug') as response:
             if response.status == 200:
@@ -322,13 +330,15 @@ async def hug(ctx, member: discord.Member):
                     color=discord.Color.purple()
                 )
                 embed.set_image(url=data['url'])
-                await ctx.respond(embed=embed)
+                await ctx.send(embed=embed)
             else:
-                await ctx.respond(f"HUGGIES TO {member.mention} from {ctx.author.mention}!!!")
+                await ctx.send(f"HUGGIES TO {member.mention} from {ctx.author.mention}!!!")
 
-@bot.slash_command(name="slap", description="Slap someone!")
-@option("member", discord.Member, description="Member to slap", required=True)
+@bot.hybrid_command(name="slap", description="Slap someone!")
 async def slap(ctx, member: discord.Member):
+    if not member:
+        return await ctx.send("Please mention someone to slap!")
+        
     async with aiohttp.ClientSession() as session:
         async with session.get('https://api.waifu.pics/sfw/slap') as response:
             if response.status == 200:
@@ -338,39 +348,38 @@ async def slap(ctx, member: discord.Member):
                     color=discord.Color.red()
                 )
                 embed.set_image(url=data['url'])
-                await ctx.respond(embed=embed)
+                await ctx.send(embed=embed)
             else:
-                await ctx.respond(f"{ctx.author.mention} slaps {member.mention}!")
+                await ctx.send(f"{ctx.author.mention} slaps {member.mention}!")
 
-@bot.slash_command(name="hello", description="Get a friendly hello from the bot")
+@bot.hybrid_command(name="hello", description="Get a friendly hello from the bot")
 async def hello(ctx):
-    await ctx.respond(f"HIII {ctx.author.mention}!!! :D")
+    await ctx.send(f"HIII {ctx.author.mention}!!! :D")
 
-@bot.slash_command(name="assign", description="Assign yourself the secret role")
+@bot.hybrid_command(name="assign", description="Assign yourself the secret role")
 async def assign(ctx):
     role = discord.utils.get(ctx.guild.roles, name=secret_role)
     if role:
         await ctx.author.add_roles(role)
-        await ctx.respond(f"{ctx.author.mention} YAY U got the role: {secret_role}!! :D")
+        await ctx.send(f"{ctx.author.mention} YAY U got the role: {secret_role}!! :D")
     else:
-        await ctx.respond("Nooo something went wrong adding the role :(")
+        await ctx.send("Nooo something went wrong adding the role :(")
 
-@bot.slash_command(name="remove", description="Remove the secret role from yourself")
+@bot.hybrid_command(name="remove", description="Remove the secret role from yourself")
 async def remove(ctx):
     role = discord.utils.get(ctx.guild.roles, name=secret_role)
     if role:
         await ctx.author.remove_roles(role)
-        await ctx.respond(f"{ctx.author.mention} Aw the role {secret_role} has vanished:(")
+        await ctx.send(f"{ctx.author.mention} Aw the role {secret_role} has vanished:(")
     else:
-        await ctx.respond("Nooo something went wrong removing the role:(")
+        await ctx.send("Nooo something went wrong removing the role:(")
 
-@bot.slash_command(name="dm", description="Have the bot DM you a message")
-@option("msg", str, description="The message to send", required=True)
-async def dm(ctx, msg: str):
+@bot.hybrid_command(name="dm", description="Have the bot DM you a message")
+async def dm(ctx, *, msg: str):
     await ctx.author.send(f"LOOOKKKK u said: {msg} :D")
-    await ctx.respond("Check your DMs! :envelope_with_arrow:", ephemeral=True)
+    await ctx.send("Check your DMs! :envelope_with_arrow:")
 
-@bot.slash_command(name="cat", description="Get a random cat picture")
+@bot.hybrid_command(name="cat", description="Get a random cat picture")
 async def cat(ctx):
     async with aiohttp.ClientSession() as session:
         async with session.get('https://api.thecatapi.com/v1/images/search') as response:
@@ -378,11 +387,11 @@ async def cat(ctx):
                 data = await response.json()
                 embed = discord.Embed(title="Meowww! :cat:", color=discord.Color.purple())
                 embed.set_image(url=data[0]['url'])
-                await ctx.respond(embed=embed)
+                await ctx.send(embed=embed)
             else:
-                await ctx.respond("Oopsie! Couldn't find a kitty right now :(")
+                await ctx.send("Oopsie! Couldn't find a kitty right now :(")
 
-@bot.slash_command(name="dog", description="Get a random dog picture")
+@bot.hybrid_command(name="dog", description="Get a random dog picture")
 async def dog(ctx):
     async with aiohttp.ClientSession() as session:
         async with session.get('https://dog.ceo/api/breeds/image/random') as response:
@@ -390,23 +399,22 @@ async def dog(ctx):
                 data = await response.json()
                 embed = discord.Embed(title="Woof Woof! :dog:", color=discord.Color.green())
                 embed.set_image(url=data['message'])
-                await ctx.respond(embed=embed)
+                await ctx.send(embed=embed)
             else:
-                await ctx.respond("Oopsie! Couldn't find a doggo right now :(")
+                await ctx.send("Oopsie! Couldn't find a doggo right now :(")
 
-@bot.slash_command(name="joke", description="Get a random joke")
+@bot.hybrid_command(name="joke", description="Get a random joke")
 async def joke(ctx):
     async with aiohttp.ClientSession() as session:
         async with session.get('https://official-joke-api.appspot.com/random_joke') as response:
             if response.status == 200:
                 data = await response.json()
-                await ctx.respond(f"**{data['setup']}**\n\n||{data['punchline']}|| :sob:")
+                await ctx.send(f"**{data['setup']}**\n\n||{data['punchline']}|| :sob:")
             else:
-                await ctx.respond("Oopsie! My joke book is empty right now :(")
+                await ctx.send("Oopsie! My joke book is empty right now :(")
 
-@bot.slash_command(name="magic8ball", description="Ask the magic 8-ball a question")
-@option("question", str, description="Your yes/no question", required=True)
-async def magic8ball(ctx, question: str):
+@bot.hybrid_command(name="magic8ball", description="Ask the magic 8-ball a question")
+async def magic8ball(ctx, *, question: str):
     responses = [
         "Yesss definitely!!", "For sure!!", "Without a doubt!",
         "Hmmmm I think yes!", "You can count on it!",
@@ -414,10 +422,15 @@ async def magic8ball(ctx, question: str):
         "Cannot predict now", "Don't count on it :(",
         "My sources say noooo", "Very doubtful", "NOPE!"
     ]
-    await ctx.respond(f"🎱 **Question:** {question}\n**Answer:** {random.choice(responses)}")
+    await ctx.send(f"🎱 **Question:** {question}\n**Answer:** {random.choice(responses)}")
 
-@bot.slash_command(name="rps", description="Play Rock Paper Scissors with the bot")
-@option("choice", str, description="Your choice (rock, paper, or scissors)", choices=["rock", "paper", "scissors"], required=True)
+@bot.hybrid_command(name="rps", description="Play Rock Paper Scissors with the bot")
+@app_commands.describe(choice="Choose rock, paper, or scissors")
+@app_commands.choices(choice=[
+    app_commands.Choice(name="rock", value="rock"),
+    app_commands.Choice(name="paper", value="paper"),
+    app_commands.Choice(name="scissors", value="scissors"),
+])
 async def rps(ctx, choice: str):
     choices = ['rock', 'paper', 'scissors']
     bot_choice = random.choice(choices)
@@ -431,22 +444,22 @@ async def rps(ctx, choice: str):
     else:
         result = "I win!! hehe :3"
     
-    await ctx.respond(f"You chose **{choice}**, I chose **{bot_choice}**. {result}")
+    await ctx.send(f"You chose **{choice}**, I chose **{bot_choice}**. {result}")
 
-@bot.slash_command(name="fact", description="Get a random useless fact")
+@bot.hybrid_command(name="fact", description="Get a random useless fact")
 async def fact(ctx):
     async with aiohttp.ClientSession() as session:
         async with session.get('https://uselessfacts.jsph.pl/api/v2/facts/random') as response:
             if response.status == 200:
                 data = await response.json()
-                await ctx.respond(f"**Random Fact:** {data['text']} :D")
+                await ctx.send(f"**Random Fact:** {data['text']} :D")
             else:
-                await ctx.respond("Oopsie! My fact book is empty right now :(")
+                await ctx.send("Oopsie! My fact book is empty right now :(")
 
-@bot.slash_command(name="secretfact", description="Get a super secret fact")
+@bot.hybrid_command(name="secretfact", description="Get a super secret fact")
 async def secretfact(ctx):
     if not discord.utils.get(ctx.author.roles, name=secret_role):
-        return await ctx.respond("Uh oh, you need the special role to see these super secret facts :eyes:", ephemeral=True)
+        return await ctx.send("Uh oh, you need the special role to see these super secret facts :eyes:", ephemeral=True)
         
     secret_facts = [
         "When you shuffle a deck of cards, it's likely that your exact arrangement has never been seen before in human history!",
@@ -456,64 +469,51 @@ async def secretfact(ctx):
         "Nintendo was founded in 1889, before the invention of cars or planes!",
         "Did u know that u are a cutie:)"
     ]
-    await ctx.respond(f"**🔮 SUPER SECRET FACT I like this one:D :** {random.choice(secret_facts)} :D")
+    await ctx.send(f"**🔮 SUPER SECRET FACT I like this one:D :** {random.choice(secret_facts)} :D")
 
-@bot.slash_command(name="guess", description="Play a number guessing game")
-async def guess(ctx):
-    number = random.randint(1, 100)
-    await ctx.respond(f"I'm thinking of a number between 1 and 100! Use the buttons below to guess!")
-    
-  
-    view = GuessView(ctx.author, number)
-    await ctx.respond("Guess a number between 1 and 100!", view=view)
-
-
-@bot.slash_command(name="simpleguessgame", description="Play a simplified number guessing game")
+@bot.command(name="simpleguessgame", description="Play a simplified number guessing game")
 async def simpleguessgame(ctx):
-    await ctx.respond("I've picked a number between 1 and 100. Use /guess_number to make guesses!")
+    await ctx.send("I've picked a number between 1 and 100. Use /guess_number to make guesses!")
     if not hasattr(bot, 'guess_games'):
         bot.guess_games = {}
     bot.guess_games[ctx.author.id] = {'number': random.randint(1, 100), 'attempts': 0, 'max_attempts': 10}
 
-@bot.slash_command(name="guess_number", description="Make a guess for the number game")
-@option("number", int, description="Your guess (1-100)", min_value=1, max_value=100, required=True)
+@bot.hybrid_command(name="guess_number", description="Make a guess for the number game")
 async def guess_number(ctx, number: int):
     if not hasattr(bot, 'guess_games') or ctx.author.id not in bot.guess_games:
-        return await ctx.respond("You don't have an active guessing game! Start one with /simpleguessgame")
+        return await ctx.send("You don't have an active guessing game! Start one with /simpleguessgame")
     
     game = bot.guess_games[ctx.author.id]
     game['attempts'] += 1
     
     if number == game['number']:
-        await ctx.respond(f"YAYYYY!!! :partying_face: You got it right in {game['attempts']} attempts! The number was indeed {game['number']}!")
+        await ctx.send(f"YAYYYY!!! :partying_face: You got it right in {game['attempts']} attempts! The number was indeed {game['number']}!")
         del bot.guess_games[ctx.author.id]
     elif game['attempts'] >= game['max_attempts']:
-        await ctx.respond(f"Awww you ran out of attempts :( The number was {game['number']}. Better luck next time!")
+        await ctx.send(f"Awww you ran out of attempts :( The number was {game['number']}. Better luck next time!")
         del bot.guess_games[ctx.author.id]
     elif number < game['number']:
-        await ctx.respond(f"Too low! Try a higher number! :point_up: ({game['attempts']}/{game['max_attempts']} attempts)")
+        await ctx.send(f"Too low! Try a higher number! :point_up: ({game['attempts']}/{game['max_attempts']} attempts)")
     else:
-        await ctx.respond(f"Too high! Try a lower number! :point_down: ({game['attempts']}/{game['max_attempts']} attempts)")
+        await ctx.send(f"Too high! Try a lower number! :point_down: ({game['attempts']}/{game['max_attempts']} attempts)")
 
-@bot.slash_command(name="poll", description="Create a simple yes/no poll")
-@option("question", str, description="The poll question", required=True)
-async def poll(ctx, question: str):
+@bot.hybrid_command(name="poll", description="Create a simple yes/no poll")
+async def poll(ctx, *, question: str):
     embed = discord.Embed(title="Question:D", description=question)
-    message = await ctx.respond(embed=embed)
+    message = await ctx.send(embed=embed)
     
     message = await ctx.fetch_message(message.id)
     await message.add_reaction("👍")
     await message.add_reaction("👎")
 
-@bot.slash_command(name="avatar", description="Show a user's avatar")
-@option("member", discord.Member, description="Member whose avatar to show", required=False)
+@bot.hybrid_command(name="avatar", description="Show a user's avatar")
 async def avatar(ctx, member: discord.Member = None):
     member = member or ctx.author
     embed = discord.Embed(title=f"{member.name}'s Avatar", color=discord.Color.purple())
     embed.set_image(url=member.avatar.url if member.avatar else member.default_avatar.url)
-    await ctx.respond(embed=embed)
+    await ctx.send(embed=embed)
 
-@bot.slash_command(name="flip", description="Flip a coin")
+@bot.hybrid_command(name="flip", description="Flip a coin")
 async def flip(ctx):
     result = random.choice(["Heads", "Tails"])
 
@@ -528,9 +528,9 @@ async def flip(ctx):
 
     embed.set_image(url=heads_url if result == "Heads" else tails_url)
 
-    await ctx.respond(embed=embed)
+    await ctx.send(embed=embed)
 
-@bot.slash_command(name="wyr", description="Would You Rather game")
+@bot.hybrid_command(name="wyr", description="Would You Rather game")
 async def wyr(ctx):
     wyr_questions = [
         ["Eat a pizza with pineapple", "Eat a burger with chocolate sauce"],
@@ -585,16 +585,24 @@ async def wyr(ctx):
     embed.add_field(name="🅰️", value=f"Option A: {options[0]}", inline=False)
     embed.add_field(name="🅱️", value=f"Option B: {options[1]}", inline=False)
     
-    message = await ctx.respond(embed=embed)
+    message = await ctx.send(embed=embed)
     message = await ctx.fetch_message(message.id)
     await message.add_reaction("🅰️")
     await message.add_reaction("🅱️")
 
-@bot.slash_command(name="remind", description="Set a reminder")
-@option("time_value", int, description="Time amount", required=True)
-@option("time_unit", str, description="Time unit", choices=["seconds", "minutes", "hours", "days"], required=True)
-@option("reminder", str, description="What to remind you about", required=True)
-async def remind(ctx, time_value: int, time_unit: str, reminder: str):
+@bot.hybrid_command(name="remind", description="Set a reminder")
+@app_commands.describe(
+    time_value="Time amount",
+    time_unit="Time unit (seconds, minutes, hours, days)",
+    reminder="What to remind you about"
+)
+@app_commands.choices(time_unit=[
+    app_commands.Choice(name="seconds", value="seconds"),
+    app_commands.Choice(name="minutes", value="minutes"),
+    app_commands.Choice(name="hours", value="hours"),
+    app_commands.Choice(name="days", value="days"),
+])
+async def remind(ctx, time_value: int, time_unit: str, *, reminder: str):
     user = ctx.author
     
     time_convert = {"seconds": 1, "minutes": 60, "hours": 3600, "days": 86400}
@@ -609,7 +617,7 @@ async def remind(ctx, time_value: int, time_unit: str, reminder: str):
     time_text = f"{time_value} {time_unit}"
     
     embed.add_field(name="⏱️ Time", value=time_text)
-    await ctx.respond(embed=embed)
+    await ctx.send(embed=embed)
     
     await asyncio.sleep(seconds)
     
@@ -629,9 +637,7 @@ async def remind(ctx, time_value: int, time_unit: str, reminder: str):
         except:
             pass 
 
-@bot.slash_command(name="ship", description="Ship two users together")
-@option("user1", discord.Member, description="First person", required=True)
-@option("user2", discord.Member, description="Second person (optional)", required=False)
+@bot.hybrid_command(name="ship", description="Ship two users together") 
 async def ship(ctx, user1: discord.Member, user2: discord.Member = None):
     if user2 is None:
         user2 = user1
@@ -686,36 +692,35 @@ async def ship(ctx, user1: discord.Member, user2: discord.Member = None):
     embed.add_field(name="Compatibility", value=f"**{ship_percentage}%**", inline=True)
     embed.add_field(name="Result", value=message, inline=True)
     
-    await ctx.respond(embed=embed)
+    await ctx.send(embed=embed)
 
-# for debugging purposes this is only to forcesave if the xp save fails. DO NOT USE RANDOMLY AS THIS CAN CAUSE DESYNC ISSUES
-@bot.slash_command(name="forcesave", description="Force save XP data (bot owner only)")
+@bot.command(name="forcesave", description="Force save XP data (bot owner only)")
 async def forcesave(ctx):
 
     if ctx.author.id != bot.owner_id:
-        return await ctx.respond("Sorry, only the bot owner can use this command.", ephemeral=True)
+        return await ctx.send("Sorry, only the bot owner can use this command.", ephemeral=True)
     
     try:
         save_xp_data()
-        await ctx.respond("XP data forcibly saved!")
+        await ctx.send("XP data forcibly saved!")
     except Exception as e:
-        await ctx.respond(f"Error saving XP data: {e}")
+        await ctx.send(f"Error saving XP data: {e}")
         traceback.print_exc()
 
-@bot.slash_command(name="rawxp", description="View raw XP data (bot owner only)")
+@bot.command(name="rawxp", description="View raw XP data (bot owner only)")
 async def rawxp(ctx):
 
     if ctx.author.id != bot.owner_id:
-        return await ctx.respond("Sorry, only the bot owner can use this command.", ephemeral=True)
+        return await ctx.send("Sorry, only the bot owner can use this command.", ephemeral=True)
     
     if len(user_xp) == 0:
-        await ctx.respond("No XP data found!")
+        await ctx.send("No XP data found!")
         return
         
     data_str = json.dumps(user_xp, indent=2)
     if len(data_str) > 1900: 
-        await ctx.respond(f"XP data (truncated, {len(user_xp)} users):\n```json\n{data_str[:1900]}...\n```")
+        await ctx.send(f"XP data (truncated, {len(user_xp)} users):\n```json\n{data_str[:1900]}...\n```")
     else:
-        await ctx.respond(f"XP data ({len(user_xp)} users):\n```json\n{data_str}\n```")
+        await ctx.send(f"XP data ({len(user_xp)} users):\n```json\n{data_str}\n```")
 
 bot.run(token, log_handler=handler, log_level=logging.DEBUG)
