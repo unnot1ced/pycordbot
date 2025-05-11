@@ -2,7 +2,7 @@
 .idea
 user_xp.json
 .gitattributes
-discord.log
+.discord.log
 firebase-key.json
 .firebase-key.json
 firebase-key-base64.txt
