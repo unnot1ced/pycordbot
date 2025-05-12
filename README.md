@@ -1,7 +1,6 @@
 # Pycordbot :D
 
-# - UNDER MAINTANCE TILL 13th of may 13:00 gmt -2)
-An awesome Python bot that can do some cool tasks! Created just for fun and learning - not meant to be a big server bot :)
+Created just for fun and learning - not meant to be a big server bot :)
 
 ## What's This About? :)
 
