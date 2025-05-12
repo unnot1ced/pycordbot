@@ -68,8 +68,8 @@ Just click this link and you're good to go: [Add Pycordbot to your server](https
 
 Once it's running:
 
-- Say `!hello` and watch it say hi back! So friendly! :D
-- Try `!help` to see all the cool commands it knows! I'm adding more all the time :)
+- Say `/hello` and watch it say hi back! So friendly! :D
+
 
 ## Need Help? :)
 
