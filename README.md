@@ -32,6 +32,7 @@ Just click this link and you're good to go: [Add Pycordbot to your server](https
 - Python 3.10 or newer
 - The awesome `discord.py` library
 - A bot token from [Discord Developer Portal](https://discord.com/developers/applications) - it's free!
+- Firebase realtime database for level system
 
 #### Let's Do This! :D
 
