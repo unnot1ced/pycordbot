@@ -1,5 +1,7 @@
 # Pycordbot :D
 
+# DOWNTIME!!! till 14th of may. 9:00am gmt -1
+
 Created just for fun and learning - not meant to be a big server bot :)
 
 ## What's This About? :)
