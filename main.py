@@ -204,8 +204,6 @@ async def on_ready():
     
     load_xp_data()
     
-    await start_webserver()
-    
     bot.loop.create_task(periodic_save())
     print("Periodic save task started")
 
@@ -721,3 +719,23 @@ async def ship(ctx, user1: discord.Member, user2: discord.Member = None):
     embed.add_field(name="Result", value=message, inline=True)
     
     await ctx.send(embed=embed)
+
+if __name__ == "__main__":
+    print("Starting application...")
+    try:
+        print(f"Starting webserver on port {PORT}...")
+        asyncio.get_event_loop().run_until_complete(start_webserver())
+        print(f"Webserver started successfully on port {PORT}")
+        
+        print("Starting Discord bot...")
+        print(f"Using token: {token[:5]}...{token[-5:] if token and len(token) > 10 else 'Invalid token!'}")
+        bot.run(token, log_handler=handler, log_level=logging.DEBUG)
+    except discord.errors.LoginFailure as e:
+        print(f"ERROR: Invalid Discord token: {e}")
+        print("Bot login failed, but webserver will continue running")
+        asyncio.get_event_loop().run_forever()
+    except Exception as e:
+        print(f"ERROR: Failed to start application: {e}")
+        traceback.print_exc()
+        print("Attempting to keep webserver running despite error...")
+        asyncio.get_event_loop().run_forever()
