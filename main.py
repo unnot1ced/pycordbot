@@ -192,17 +192,6 @@ def index():
 def run_flask_app():
     app.run(host='0.0.0.0', port=PORT, debug=False)
 
-async def start_discord_bot():
-    try:
-        print("Starting Discord bot...")
-        print(f"Using token: {token[:5]}...{token[-5:] if token and len(token) > 10 else 'Invalid token!'}")
-        await bot.start(token)
-    except discord.errors.LoginFailure as e:
-        print(f"ERROR: Invalid Discord token: {e}")
-    except Exception as e:
-        print(f"ERROR: Failed to start bot: {e}")
-        traceback.print_exc()
-
 @bot.event
 async def on_ready():
     print(f"YAYYY!! We are up and running:) {bot.user.name}")
@@ -741,9 +730,9 @@ if __name__ == "__main__":
     print(f"Web server thread started on port {PORT}")
     
     try:
-        bot.setup_logging(handler=handler, level=logging.DEBUG)
-        
-        asyncio.run(start_discord_bot())
+        print("Starting Discord bot...")
+        print(f"Using token: {token[:5]}...{token[-5:] if token and len(token) > 10 else 'Invalid token!'}")
+        bot.run(token, log_handler=handler, log_level=logging.DEBUG)
     except KeyboardInterrupt:
         print("Application shutting down...")
     except Exception as e:
