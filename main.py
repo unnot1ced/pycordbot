@@ -178,19 +178,30 @@ def calculate_level(xp):
 def xp_for_level(level):
     return int(level ** 2 * 100)
 
-app = web.Application()
+app = Flask(__name__)
 
-async def handle_index(request):
-    return web.Response(text=f"{bot.user.name} is up and running!")
+@app.route('/')
+def index():
+    status = "Initializing"
+    if hasattr(bot, 'user') and bot.user:
+        status = f"{bot.user.name} is up and running!"
+    else:
+        status = "Bot is starting up..."
+    return f"Discord Bot Status: {status}"
 
-app.router.add_get('/', handle_index)
+def run_flask_app():
+    app.run(host='0.0.0.0', port=PORT, debug=False)
 
-async def start_webserver():
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', PORT)
-    await site.start()
-    print(f"Web server started on port {PORT}")
+async def start_discord_bot():
+    try:
+        print("Starting Discord bot...")
+        print(f"Using token: {token[:5]}...{token[-5:] if token and len(token) > 10 else 'Invalid token!'}")
+        await bot.start(token)
+    except discord.errors.LoginFailure as e:
+        print(f"ERROR: Invalid Discord token: {e}")
+    except Exception as e:
+        print(f"ERROR: Failed to start bot: {e}")
+        traceback.print_exc()
 
 @bot.event
 async def on_ready():
@@ -722,20 +733,19 @@ async def ship(ctx, user1: discord.Member, user2: discord.Member = None):
 
 if __name__ == "__main__":
     print("Starting application...")
+    
+    print(f"Starting web server on port {PORT}...")
+    web_thread = threading.Thread(target=run_flask_app)
+    web_thread.daemon = True
+    web_thread.start()
+    print(f"Web server thread started on port {PORT}")
+    
     try:
-        print(f"Starting webserver on port {PORT}...")
-        asyncio.get_event_loop().run_until_complete(start_webserver())
-        print(f"Webserver started successfully on port {PORT}")
+        bot.setup_logging(handler=handler, level=logging.DEBUG)
         
-        print("Starting Discord bot...")
-        print(f"Using token: {token[:5]}...{token[-5:] if token and len(token) > 10 else 'Invalid token!'}")
-        bot.run(token, log_handler=handler, log_level=logging.DEBUG)
-    except discord.errors.LoginFailure as e:
-        print(f"ERROR: Invalid Discord token: {e}")
-        print("Bot login failed, but webserver will continue running")
-        asyncio.get_event_loop().run_forever()
+        asyncio.run(start_discord_bot())
+    except KeyboardInterrupt:
+        print("Application shutting down...")
     except Exception as e:
-        print(f"ERROR: Failed to start application: {e}")
+        print(f"ERROR: Application failure: {e}")
         traceback.print_exc()
-        print("Attempting to keep webserver running despite error...")
-        asyncio.get_event_loop().run_forever()
