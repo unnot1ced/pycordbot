@@ -46,12 +46,7 @@ level_roles = {
 user_xp = {}
 
 swear_words = [
-    "shit", "fuck", "damn", "bitch", "asshole", "bastard", 
-    "cunt", "dick", "piss", "cock", "pussy", 
-    "ass", "hell", "whore", "hoe", "slut", "bullshit", 
-    "motherfucker", "fucker", "dickhead", "fuk", "fck", "f*ck",
-    "s*it", "b*tch", "a$$", "a$$hole", "sh*t", "b!tch", "d!ck",
-    "f**k", "sh!t", "a**", "a**hole", "p*ssy", "c*nt"
+    "job application", "hawk tuah", "hawktuah", "cancer"
 ]
 
 try:
